@@ -309,6 +309,11 @@ const slotParkedUser = async (req, res) => {
       vehicletype,
       startDate: new Date(), 
       user: userId, 
+
+
+
+
+      
     });
     const availableParkingSlot = await Parkingslot.findOne({ status: true });
 
