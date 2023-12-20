@@ -1,51 +1,6 @@
 import Area from '../model/areamodel.js'; 
 import userdb from '../model/usermodel.js'
-// const adminArea = async (req, res) => {
-//   try {
-//     const { areaName, totalSlots, remainingSlots } = req.body;
-//     const adminId = req.userId;
-
-//     // Check if the area already exists for the specified adminId
-//     let existingArea = await Area.findOne({ adminId });
-
-//     if (!existingArea) {
-//       // If the area doesn't exist, create a new Area instance
-//       existingArea = new Area({ adminId });
-//     }
-
-//     // Add the new address to the siteAddress array
-//     existingArea.siteAddress.push({ areaName, totalSlots, remainingSlots });
-
-//     // Update remaining slots based on the added slots
-//     const addedSlots = []; // Collect added slots to calculate remaining slots
-
-//     for (let i = 1; i <= totalSlots; i++) {
-//       const slotNumber = i;
-//       const status = i % 2 === 0; // Set status based on even or odd slot numbers
-
-//       addedSlots.push({ slotNumber, status });
-//     }
-
-//     const addedSlotsCount = addedSlots.filter(slot => slot.status).length;
-//     existingArea.siteAddress = existingArea.siteAddress.map(site => {
-//       if (site.areaName === areaName) {
-//         return {
-//           ...site,
-//           remainingSlots: site.remainingSlots - addedSlotsCount,
-//         };
-//       }
-//       return site;
-//     });
-
-//     // Save the changes to the database
-//     await existingArea.save();
-
-//     res.status(200).json({ message: 'Address added successfully', area: existingArea });
-//   } catch (error) {
-//     console.error('Error adding address:', error);
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// };
+import {messages, responseStatus, statusCode} from '../core/constant/constant.js';
 
 const adminArea = async (req, res) => {
   try {
@@ -63,10 +18,9 @@ const adminArea = async (req, res) => {
 
     await existingArea.save();
 
-    res.status(200).json({ message: 'Address added successfully', area: existingArea });
+    res.status(statusCode.Ok).json({ message: messages.addressAdd , success: responseStatus.success, data: existingArea });
   } catch (error) {
-    console.error('Error adding address:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(statusCode.Bad_request).json({ error: error.message });
   }
 };
 
@@ -94,13 +48,13 @@ const editDataByAdmin = async (req, res) => {
       };
       const userData = await userdb.findByIdAndUpdate(userId, { $set: updateFields }, { new: true });
       if (!userData) {
-        return res.status(404).json({ error: 'User not found' });
+        return res.status(statusCode.Not_Found).json({success: responseStatus.failure, error: messages.UnauthorizedUser });
       } else {
-        return res.status(200).json(userData);
+        return res.status(statusCode.Ok).json({success: responseStatus.success, data: userData });
       }
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: `Internal error: ${err.message}` });
+
+      return res.status(statusCode.Bad_request).json({ error: err.message });
     }
   };
 export{

@@ -1,7 +1,6 @@
 import userdb from '../model/usermodel.js';
-const registerData=(req,res)=>{
-    res.status(200).send('hello superboss');
-}
+import {messages, responseStatus, statusCode} from '../core/constant/constant.js';
+
 const editDataBySuperadmin = async (req, res) => {
     try {
       const userId = req.params.id;
@@ -20,16 +19,14 @@ const editDataBySuperadmin = async (req, res) => {
       };
       const userData = await userdb.findByIdAndUpdate(userId, { $set: updateFields }, { new: true });
       if (!userData) {
-        return res.status(404).json({ error: 'User not found' });
+        return res.status(statusCode.Bad_request).json({success: responseStatus.failure, error: messages.UnauthorizedUser });
       } else {
-        return res.status(200).json(userData);
+        return res.status(statusCode.Ok).json({success: responseStatus.success, data: userData });
       }
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: `Internal error: ${err.message}` });
+      return res.status(statusCode.Bad_request).json({ error: err.message });
     }
   };
 export{
-  editDataBySuperadmin,
-    registerData
+  editDataBySuperadmin
 }

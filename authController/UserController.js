@@ -2,11 +2,13 @@ import userdb from '../model/usermodel.js';
 import Area from '../model/areamodel.js';
 import Parkingslot from '../model/parkingSlot.js';
 import SlotParkedUser from '../model/parkedUser.js';
+import {messages, responseStatus, statusCode} from '../core/constant/constant.js';
 import Payment from '../model/payment.js';
 import bcrypt from 'bcrypt';
 import 'dotenv/config';
 import nodemailer from 'nodemailer';
 import JWT from 'jsonwebtoken';
+import { response } from 'express';
 const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;
 const MAX_AGE = 3*24*60*60;
 const registerData = async (req, res) => {
@@ -33,14 +35,14 @@ const registerData = async (req, res) => {
       const text = `Please click the following link to verify your email: <a href="http://localhost:5000/email/${userData._id}">email</a>`;
       const sub = "Verify Email";
       await sendMail(email, text, sub);
-      res.status(200).send({
+      res.status(statusCode.Ok).send({
         success: true,
-        msg: "Email sent successfully",
+        msg: messages.successMail,
         data: userData,
       });
     } catch (error) {
-      console.error("Error in regController:", error);
-      res.status(400).send({ success: false, msg: error.message });
+   
+      res.status(statusCode.Bad_request).send({ success: false, msg: error.message });
     }
   };
   const loginpost = async (req, res) => {
@@ -49,31 +51,30 @@ const registerData = async (req, res) => {
         console.log(user);
 
         if (!user) {
-            return res.status(400).json({ error: "User not found" });
+            return res.status(statusCode.Not_Found).json({ error: messages.unauthorizedEmail });
         }
       
         if(user.is_verified==0){
-          return res.status(200).json({error: "you are not verified with us"})
+          return res.status(statusCode.Unauthorized).json({error: messages.notVerified});
         }
 
         const isPasswordValid = await bcrypt.compare(req.body.password, user.password);
 
         if (isPasswordValid) {
             if (!(JWT_SECRET_KEY)) {
-                return res.status(500).json({ error: "JWT secret key is not defined" });
+                return res.status(statusCode.Bad_request).json({ error: messages.jwtNotDefined });
             }
 
             const token = JWT.sign({ userId: user._id }, JWT_SECRET_KEY, { expiresIn: '2h' });
 
             res.cookie("jwt", token, { httpOnly: true, maxAge: MAX_AGE * 1000 });
 
-            res.status(200).json({ user: user._id, token });
+            res.status(statusCode.Created).json({ user: user._id, token });
         } else {
-            res.status(401).json({ error: "Invalid password" }); 
+            res.status(statusCode.Unauthorized).json({ error: messages.UnauthorizedPassword }); 
         }
     } catch (error) {
-      console.error("Error in loginpost:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+        res.status(statusCode.Bad_request).json({ error: messages.loginError });
     }
 };
   const sendMail = async (email, text, sub) => {
@@ -115,9 +116,8 @@ const registerData = async (req, res) => {
       const userId = req.params.userId;
       const userData = await userdb.findById({ _id: userId });
       if (userData.is_verified == 1) {
-        return res.status(400).send({
-          status: "failed",
-          message: "Already verified",
+        return res.status(statusCode.Bad_request).send({
+          message: messages.alreadyVerified,
         });
       } else {
         const currentTime = new Date();
@@ -135,14 +135,14 @@ const registerData = async (req, res) => {
   
             await sendMail(userData.email, text, sub);
   
-            return res.status(400).send({
-              status: "failed",
-              message: "Verification time expired. User record deleted.",
+            return res.status(statusCode.Bad_request).send({
+              status: responseStatus.failure,
+              message: messages.verificationTimeExpired,
             });
           } else {
-            return res.status(500).send({
-              status: "failed",
-              message: "Failed to delete user record.",
+            return res.status(statusCode.Bad_request).send({
+              status: responseStatus.failure,
+              message: messages.notDeletd,
             });
           }
         }
@@ -157,14 +157,13 @@ const registerData = async (req, res) => {
         );
         await sendMail(userData.email, text, sub);
   
-        res.status(200).send({
+        res.status(statusCode.Ok).send({
           success: true,
-          msg: "Email sent successfully",
+          msg: messages.successMail,
           user: updatedData,
         });
       }
     } catch (error) {
-      console.error("Error in regController:", error);
       res.status(500).send({ success: false, msg: error.message });
     }
   };
@@ -173,7 +172,7 @@ const registerData = async (req, res) => {
         const user = await userdb.findOne({ email: req.body.email });
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+          return res.status(statusCode.Not_Found).json({ error: messages.unauthorizedEmail });
         }
 
         const resetUrl = `http://localhost:5000/reset-password/${user._id}`;
@@ -182,10 +181,9 @@ const registerData = async (req, res) => {
         const sub = "Reset Password";
         await sendMail(user.email, text, sub);
 
-        res.status(200).json({ message: 'Password reset email sent' });
+        res.status(statusCode.Ok).json({ message: messages.resetEmail });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(statusCode.Not_Found).json({ message: messages.unauthorizedEmail });
     }
 };
 const resetPassword = async (req, res) => {
@@ -193,14 +191,14 @@ const resetPassword = async (req, res) => {
       const userId = req.params.id;
 
       if (!userId) {
-          return res.status(400).json({ message: 'Invalid user ID' });
+        return res.status(statusCode.Not_Found).json({ error: messages.unauthorizedEmail });
       }
 
       const password = req.body.password;
 
    
       if (!password) {
-          return res.status(400).json({ message: 'New password is required' });
+          return res.status(statusCode.Bad_request).json({ message: messages.passwordRequired });
       }
 
       const salt = await bcrypt.genSalt();
@@ -218,15 +216,13 @@ const resetPassword = async (req, res) => {
       );
 
       if (!user) {
-          console.error('Invalid or expired token. User not found or token expired.');
           return res.status(400).json({ message: 'Invalid or expired token' });
       }
 
-      console.log('Password reset successful.');
-      res.status(200).json({ message: 'Password reset successful' });
+      res.status(statusCode.Ok).json({ message: messages.Changepassword });
   } catch (error) {
-      console.error('Error in resetPassword:', error);
-      res.status(500).json({ message: 'Internal Server Error' });
+      
+      res.status(statusCode.Bad_request).json({ message: messages.changepasswordError});
   }
 };
 const listUser = async(req, res) => {
@@ -236,11 +232,11 @@ const listUser = async(req, res) => {
      res.send(user);
     }else{
     
-        res.status(400).json('User not found or invalid credentials');
+        res.status(statusCode.Bad_request).json(messages.UnauthorizedUser);
       }
     } catch (err) {
-    console.log(err.message);
-    res.status(400).json('internal server error');
+
+    res.status(statusCode.Bad_request).json(err);
   }
 
 };
@@ -248,12 +244,11 @@ const editData = async (req, res) => {
   try {
       const userId = req.params.id;
       const user = await userdb.findById(userId);
-     console.log(user);
      if(user.Role<3){
-     return res.status(200).json({error: 'you have no rights to do any changes'});
+     return res.status(statusCode.Bad_request).json({error: messages.unauthorizedAction});
      }
       if (!req.body.email && !req.body.firstName && !req.body.lastName && !req.body.phoneNumber && !req.body.Address) {
-          return res.status(400).json({ error: 'At least one field (email, firstName, lastName, phoneNumber, address) is required for update' });
+          return res.status(statusCode.Bad_request).json({ error: messages.updationRequired });
       }
       const allowedFields = ['firstName', 'lastName', 'email', 'phoneNumber', 'password','Address'];
       const updateFields = Object.keys(req.body).reduce((acc, field) => {
@@ -265,13 +260,12 @@ const editData = async (req, res) => {
       updateFields.Updated_At = new Date();
       const userData = await userdb.findByIdAndUpdate(userId, { $set: updateFields }, { new: true });
       if (!userData) {
-          return res.status(404).json({ error: 'User not found' });
+          return res.status(statusCode.Bad_request).send({success:responseStatus.failure, msg: messages.UnauthorizedUser });
       } else {
-          return res.status(200).json(userData);
+          return res.status(statusCode.Ok).json(userData);
       }
   } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: `Internal error: ${err.message}` });
+      return res.status(statusCode.Bad_request).json({ error: err.message });
   }
 };
 
@@ -288,12 +282,12 @@ const delData = async (req, res) => {
     const userData = await userdb.findById({ _id: userId });
 
     if (!userData) {
-      return res.status(404).send('User not found');
+      return res.status(statusCode.Not_Found).send({success: responseStatus.failure, error: messages.UnauthorizedUser});
     }
     await userdb.findByIdAndUpdate(userId, { $set: { is_Deleted: true } });
-    res.status(200).send('User deleted successfully');
+    res.status(statusCode.Ok).send({success: responseStatus.success, msg: messages.deletedUser});
   } catch (err) {
-    res.status(500).send(`Internal error: ${err.message}`);
+    res.status(statusCode.Bad_request).send({success: responseStatus.failure, err: err.message});
   }
 };
 const slotParkedUser = async (req, res) => {
@@ -309,16 +303,11 @@ const slotParkedUser = async (req, res) => {
       vehicletype,
       startDate: new Date(), 
       user: userId, 
-
-
-
-
-      
     });
     const availableParkingSlot = await Parkingslot.findOne({ status: true });
 
     if (!availableParkingSlot) {
-      return res.status(404).json({ message: 'No available parking slots' });
+      return res.status(statusCode.Bad_request).json({success:responseStatus.failure, message: messages.noSlots  });
     }
     newSlotParkedUser.parkingSlot = availableParkingSlot._id;
 
@@ -329,54 +318,45 @@ const slotParkedUser = async (req, res) => {
     availableParkingSlot.status = false;
     await availableParkingSlot.save();
 
-    res.status(201).json(savedSlotParkedUser);
+    res.status(statusCode.Created).json({success: responseStatus.success, message: messages.availableSlots, data: savedSlotParkedUser});
   } catch (error) {
-    console.error('Error creating slotParkedUser:', error);
-    res.status(500).send('Internal Server Error');
+
+    res.status(statusCode.Bad_request).send({success: responseStatus.failure, err: error.message});
   }
 };
 const getAmountBasedOnVehicleType = (vehicleType) => {
-  return vehicleType.toLowerCase() === '2wheeler' ? 20 : (vehicleType.toLowerCase() === '4wheeler' ? 40 : 0);
+  return vehicleType.toLowerCase() === '2wheeler' ? process.env.twoWheeler : (vehicleType.toLowerCase() === '4wheeler' ? process.env.fourWheeler : 0);
 };
 const payment = async (req, res) => {
   try {
-      // Get the vehicle number from request parameters
-      const vehiclenumber = req.params.vehiclenumber;
-      console.log(vehiclenumber);
-
-      // Find the SlotParkedUser by vehiclenumber
-      const slotParkedUser = await SlotParkedUser.findOne({ vehiclenumber: vehiclenumber });
-      console.log(slotParkedUser);
-
+    
+      const parkedUserId  = req.params.id;
+      // Find the SlotParkedUser by vehicle number
+      const slotParkedUser = await SlotParkedUser.findOne({ _id: parkedUserId });
+      
       if (!slotParkedUser) {
-          return res.status(404).json({ message: 'SlotParkedUser not found' });
+          return res.status(statusCode.Not_Found).json({ success: responseStatus.failure, message: messages.UnauthorizedUser });
       }
 
-      const amount = process.env.PAYMENT_AMOUNT;
+      const amount = getAmountBasedOnVehicleType(slotParkedUser.vehicletype);
 
-      if (!amount) {
-          return res.status(500).json({ error: 'Payment amount is not defined in the environment variable.' });
-      }
-
-      const vehicleType = slotParkedUser.vehicletype;
-
+      // Check if a payment record already exists for the SlotParkedUser
       const existingPayment = await Payment.findOne({ SlotParkedUser: slotParkedUser._id });
 
       if (existingPayment) {
-         
-          existingPayment.amount = getAmountBasedOnVehicleType(vehicleType);
-          existingPayment.paid = paid || false;
+          // Update the existing payment record
+          existingPayment.amount = amount;
+          existingPayment.paid = true; // Assuming you want to mark it as paid whenever the payment is updated
 
           const updatedPayment = await existingPayment.save();
-          return res.status(200).json(updatedPayment);
+          return res.status(statusCode.Ok).json({ success: responseStatus.success, updatedPayment});
       }
 
-     
+      // Create a new payment record
       const newPayment = new Payment({
-          amount: getAmountBasedOnVehicleType(vehicleType),
-          paid: paid || false,
+          amount: amount,
+          paid: true, // Assuming you want to mark it as paid when creating a new payment
           SlotParkedUser: slotParkedUser._id,
-          vehicleType,
       });
 
       const savedPayment = await newPayment.save();
@@ -401,7 +381,7 @@ const addParkingSlots = async (req, res) => {
     });
 
     if (!existingArea) {
-      return res.status(404).json({ success: false, msg: 'Area not found' });
+      return res.status(statusCode.Not_Found).json({ success: responseStatus.failure , msg: messages. invalidArea });
     }
 
     const site = existingArea.siteAddress.find((site) => site.areaName === areaName);
@@ -429,14 +409,14 @@ const addParkingSlots = async (req, res) => {
     // Save all slots at once
     const parkingslotdata = await Parkingslot.insertMany(slots);
 
-    return res.status(200).json({
-      success: true,
+    return res.status(statusCode.Ok).json({
+      success: responseStatus.success,
       msg: `${totalSlots} parking slots added successfully`,
       data: parkingslotdata,
     });
   } catch (error) {
-    console.error("Error adding parking slots:", error);
-    return res.status(500).json({ success: false, msg: error.message });
+
+    return res.status(statusCode.Bad_request).json({ success: responseStatus.failure, msg: error.message });
   }
 };
 const getRemainingSlots = async (req, res) => {
@@ -447,7 +427,7 @@ const getRemainingSlots = async (req, res) => {
     const parkingSlots = await Parkingslot.find({ parkingid: areaId });
 
     if (!parkingSlots || parkingSlots.length === 0) {
-      return res.status(404).json({ success: false, msg: 'No parking slots found for the area' });
+      return res.status(statusCode.Bad_request).json({ success: responseStatus.failure, msg: messages.invalidArea });
     }
 
     // Calculate remaining slots based on the status
@@ -457,14 +437,13 @@ const getRemainingSlots = async (req, res) => {
       occupied: parkingSlots.filter(slot => slot.status).length,
     };
 
-    return res.status(200).json({
-      success: true,
-      msg: 'Remaining parking slots retrieved successfully',
+    return res.status(statusCode.Ok).json({
+      success: responseStatus.success,
+      msg: messages.remainingSlots,
       data: remainingSlots,
     });
   } catch (error) {
-    console.error("Error retrieving remaining parking slots:", error);
-    return res.status(500).json({ success: false, msg: error.message });
+    return res.status(statusCode.Bad_request).json({ success: responseStatus.failure, msg: error.message });
   }
 };
 const addMoneyToWallet = async (req, res) => {
